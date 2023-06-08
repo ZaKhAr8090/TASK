@@ -1,0 +1,38 @@
+import pandas as pd
+a=pd.read_excel('/Users/user/Downloads/test_input.xlsx', dtype=str)
+a=pd.concat([pd.DataFrame([a.columns.values], columns=a.columns), a], ignore_index=True)
+
+c=a.iloc[4::]
+c=c.rename(columns=c.iloc[0]).reset_index(drop= True)
+c=c.drop(c.index[0]).reset_index(drop= True)
+
+b=a.head(3).T
+b=b.rename(columns=b.iloc[0]).drop(b.index[0])
+b=b.iloc[:, 2:3].reset_index(drop= True ).head(1).reindex(index=range(len(c)), method='ffill')
+d=pd.concat([b, c], axis=1)
+
+d.columns = ['FILENAME','CERTNO', 'CERTDATE', 'STATUS', 'IEC', 'EXPNAME', 'BILLID', 'SDATE', 'SCC', 'SVALUE']
+d['CERTDATE'] = d['CERTDATE'].astype('datetime64').dt.strftime('%Y-%m-%d')
+d['SDATE'] = d['SDATE'].astype('datetime64').dt.strftime('%Y-%m-%d')
+d['EXPNAME'] = d['EXPNAME'].apply(lambda x: '"' + str(x) + '"')
+d['IEC'] = d['IEC'].apply(lambda x: '0' + str(x) )
+
+d.to_excel('output_xlsx_v1.xlsx', index=False)
+
+
+import requests as rq
+import re 
+exrate=[]
+
+SDATE = d['SDATE'].astype('datetime64').dt.strftime('%d.%m.%Y').tolist()
+SVALUE = [float(i) for i in d['SVALUE'].tolist()]
+
+for i in SDATE:
+    RR = rq.get('https://www.cbr.ru/currency_base/daily/?UniDbQuery.Posted=True&UniDbQuery.To='+str(i)).text
+    GG=re.findall('Доллар США</td>\r\n          <td>(.*?)</td>', RR)
+    exrate.append(float(GG[0].replace(',', '.')))
+
+SVALUEUSD = list(map(lambda x, y: round(x / y, 2), SVALUE, exrate))
+d['SVALUEUSD'] = SVALUEUSD
+d = d.astype(str)
+d.to_excel('output_xlsx_v2.xlsx', index=False)
